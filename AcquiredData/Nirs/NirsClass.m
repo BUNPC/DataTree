@@ -260,7 +260,7 @@ classdef NirsClass < AcqDataClass & FileLoadSaveClass
             end
             if isproperty(fdata,'CondNames')
                 obj.CondNames = fdata.CondNames;
-                if size(fdata.s,1) ~= length(fdata.CondNames)
+                if size(fdata.s,2) ~= length(fdata.CondNames)
                     if err==0
                         err = -6;
                     end
