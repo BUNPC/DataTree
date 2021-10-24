@@ -8,6 +8,7 @@ classdef DataFilesClass < handle
         pathnm;
         config;
         nfiles;
+        logger
     end
     
     methods
@@ -19,6 +20,12 @@ classdef DataFilesClass < handle
             obj.nfiles = 0;
             obj.err = -1;
             obj.errmsg = {};
+            
+            global logger
+            
+            logger = InitLogger(logger);
+            
+            obj.logger = logger;
             
             skipconfigfile = false;
             askToFixNameConflicts = [];
@@ -298,7 +305,8 @@ classdef DataFilesClass < handle
             
             % Try to create object of data type and load data into it
             for ii = 1:length(obj.files)
-                eval(sprintf('o = %s(obj.files(ii).name);', constructor));
+                filename = [obj.files(ii).pathfull, obj.files(ii).name];
+                eval( sprintf('o = %s(filename);', constructor) );
                 if o.GetError()<0
                     errorIdxs = [errorIdxs, ii];
                 end
@@ -309,6 +317,10 @@ classdef DataFilesClass < handle
         
         % ----------------------------------------------------------
         function err = GetError(obj)
+            err = -1;
+            if isempty(obj)
+                return;
+            end
             err = obj.err;
         end
         
