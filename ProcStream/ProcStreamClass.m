@@ -13,13 +13,16 @@ classdef ProcStreamClass < handle
         
         % ----------------------------------------------------------------------------------
         function obj = ProcStreamClass(acquired)
+            global cfg
+            
+            cfg = InitConfig(cfg);           
+            
             if nargin<1
                 acquired=[];
             end
             obj.fcalls = FuncCallClass().empty();
             obj.fcallsIdxs = [];
             obj.config = struct('procStreamCfgFile','', 'defaultProcStream','','suffix','');
-            cfg = ConfigFileClass();
             obj.config.procStreamCfgFile    = cfg.GetValue('Processing Stream Config File');
             obj.config.regressionTestActive = cfg.GetValue('Regression Test Active');
             copyOptions = '';
@@ -1153,8 +1156,9 @@ classdef ProcStreamClass < handle
 
         % ----------------------------------------------------------------------------------
         function suffix = getDefaultProcStream()
+            global cfg             
             suffix = '';
-            defaultProcStream = ConfigFileClass().GetValue('Default Processing Stream Style');
+            defaultProcStream = cfg.GetValue('Default Processing Stream Style');
             if includes(lower(defaultProcStream),'nirs')
                 suffix = '_Nirs';
             end

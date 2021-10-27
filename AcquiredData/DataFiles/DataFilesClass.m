@@ -8,17 +8,26 @@ classdef DataFilesClass < handle
         pathnm;
         config;
         nfiles;
+        logger
     end
     
     methods
         
         % ----------------------------------------------------
-        function obj = DataFilesClass(varargin)
+        function obj = DataFilesClass(varargin)            
             obj.type = '';
             obj.pathnm = pwd;
             obj.nfiles = 0;
             obj.err = -1;
             obj.errmsg = {};
+            
+            global logger
+            global cfg
+            
+            logger = InitLogger(logger);
+            cfg    = InitConfig(cfg);
+            
+            obj.logger = logger;
             
             skipconfigfile = false;
             askToFixNameConflicts = [];
@@ -56,7 +65,6 @@ classdef DataFilesClass < handle
             
             % Configuration parameters
             obj.config = struct('RegressionTestActive','','AskToFixNameConflicts',1);
-            cfg = ConfigFileClass();
             if skipconfigfile==false
                 str = cfg.GetValue('Regression Test Active');
                 if strcmp(str,'true')
@@ -175,6 +183,9 @@ classdef DataFilesClass < handle
         
         % --------------------------------------------------------------------------
         function answer = AskToFixNameConflicts(obj, ii)
+            global cfg
+            
+            ConfigFileClass
             answer = 0;
             if obj.config.AskToFixNameConflicts == 0
                 obj.files(ii).NameConflictFixed();
@@ -185,7 +196,6 @@ classdef DataFilesClass < handle
                 return;
             end
             if length(q)>1 && q(2) == 1
-                cfg = ConfigFileClass();
                 cfg.SetValue('Fix File Name Conflicts', sprintf('don''t ask again'));
                 cfg.Save()
                 obj.config.AskToFixNameConflicts = 0;
@@ -298,7 +308,8 @@ classdef DataFilesClass < handle
             
             % Try to create object of data type and load data into it
             for ii = 1:length(obj.files)
-                eval(sprintf('o = %s(obj.files(ii).name);', constructor));
+                filename = [obj.files(ii).pathfull, obj.files(ii).name];
+                eval( sprintf('o = %s(filename);', constructor) );
                 if o.GetError()<0
                     errorIdxs = [errorIdxs, ii];
                 end
@@ -309,6 +320,10 @@ classdef DataFilesClass < handle
         
         % ----------------------------------------------------------
         function err = GetError(obj)
+            err = -1;
+            if isempty(obj)
+                return;
+            end
             err = obj.err;
         end
         

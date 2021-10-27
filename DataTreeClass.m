@@ -21,13 +21,14 @@ classdef DataTreeClass <  handle
         % ---------------------------------------------------------------
         function obj = DataTreeClass(groupDirs, fmt, procStreamCfgFile, options)
             global logger
+            global cfg
             
             obj.groups              = GroupClass().empty();
             obj.currElem            = TreeNodeClass().empty();
             obj.reg                 = RegistriesClass().empty();
-            obj.config              = ConfigFileClass().empty();
             obj.dirnameGroups       = {};
             obj.logger              = InitLogger(logger, 'DataTree');
+            cfg                     = InitConfig(cfg);
             
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -68,7 +69,6 @@ classdef DataTreeClass <  handle
                 return;
             end
             
-            cfg = ConfigFileClass();
             obj.dataStorageScheme = cfg.GetValue('Data Storage Scheme');
 
             % Estimate amount of memory required and set the data storage scheme

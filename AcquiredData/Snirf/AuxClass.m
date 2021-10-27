@@ -82,7 +82,19 @@ classdef AuxClass < FileLoadSaveClass
                 obj.dataTimeSeries  = HDF5_DatasetLoad(gid, 'dataTimeSeries');
                 obj.time            = HDF5_DatasetLoad(gid, 'time');
                 obj.timeOffset      = HDF5_DatasetLoad(gid, 'timeOffset');
-
+               
+                % Name should not be loaded as a 1x1 cell array, but some
+                % Python interfaces lead to it being saved this way.
+                %
+                % This is due to the string being saved in fixed vs.
+                % variable length format. See: https://support.hdfgroup.org/HDF5/doc1.6/UG/11_Datatypes.html
+                %
+                % As of version 1.0 of the SNIRF specification, this is not
+                % an issue of spec compliance.
+                if iscell(obj.name) && length(obj.name) == 1
+                    obj.name = obj.name{1};
+                end
+                
                 err = obj.ErrorCheck();
                 
                 % Close group
