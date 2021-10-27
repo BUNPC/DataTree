@@ -28,8 +28,10 @@ classdef TreeNodeClass < handle
         % ---------------------------------------------------------------------------------
         function obj = TreeNodeClass(arg)
             global logger
+            global cfg
 
             obj.logger = InitLogger(logger);
+            obj.cfg    = InitConfig(cfg);
 
             obj.DEBUG = 0;
             
@@ -43,7 +45,6 @@ classdef TreeNodeClass < handle
             obj.CondNames = {};
             obj.path = filesepStandard(pwd);            
             
-            obj.cfg = ConfigFileClass();
             obj.outputDirname = filesepStandard(obj.cfg.GetValue('Output Folder Name'), 'nameonly:dir');
 
             obj.InitParentAppFunc();
@@ -770,6 +771,7 @@ classdef TreeNodeClass < handle
         
         % ----------------------------------------------------------------------------------
         function status = Mismatch(obj, obj2)
+            global cfg
             status = 0;
             if exist('obj2','var')                
                 if obj == obj2
@@ -809,7 +811,6 @@ classdef TreeNodeClass < handle
             if selection(2)>0
                 if ~strcmp(obj.GroupDataLoadWarnings, configFileOptions{selection(2)})
                     % Overwrite config value
-                    cfg = ConfigFileClass();
                     cfg.SetValue('Group Data Loading Warnings', configFileOptions{selection(2)});
                     cfg.Save();
                     obj.GroupDataLoadWarnings()
@@ -908,9 +909,10 @@ classdef TreeNodeClass < handle
                 
         % --------------------------------------------------------------------------------
         function out = GroupDataLoadWarnings()
+            global cfg
+            
             persistent v;
             if ~exist('arg','var')
-                cfg = ConfigFileClass();
                 v = cfg.GetValue('Group Data Loading Warnings');
             elseif exist('arg','var')
                 v = arg;
