@@ -405,6 +405,11 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
                 end
                 ii=ii+1;
             end
+            
+            % This is a required field. If it's empty means the whole snirf object is bad
+            if isempty(obj.data)
+                err = -1;
+            end
         end
         
         
@@ -449,6 +454,11 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         function err = LoadProbe(obj, fileobj, ~)
             obj.probe = ProbeClass();
             err = obj.probe.LoadHdf5(fileobj, [obj.location, '/probe']);
+            
+            % This is a required field. If it's empty means the whole snirf object is bad
+            if isempty(obj.probe)
+                err = -1;
+            end
         end
         
         

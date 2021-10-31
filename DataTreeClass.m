@@ -219,9 +219,11 @@ classdef DataTreeClass <  handle
                 obj.dirnameGroups{kk} = filesepStandard(groupDirs{kk},'full');
 
                 iGnew = length(obj.groups)+1;
-                
+                               
                 % Get file names and load them into DataTree
                 while length(obj.groups) < iGnew
+                    
+                    obj.logger.Write('\n');
                     
                     % Find group folder and it's acqiosition files                    
                     obj.files    = FileClass().empty();
@@ -239,7 +241,9 @@ classdef DataTreeClass <  handle
                         iter = iter+1;
                     end                    
                     obj.files = dataInit.files;
-                                        
+
+                    obj.logger.Write('\n');
+
                     % Print file and folder numbers stats
                     nfolders = length(dataInit.files)-dataInit.nfiles;
                     if nfolders==0

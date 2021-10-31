@@ -41,7 +41,7 @@ classdef DataFilesClass < handle
             if nargin==2
                 obj.pathnm = varargin{1};
                 obj.type = varargin{2};
-            end            
+            end
             if nargin==3
                 obj.pathnm = varargin{1};
                 obj.type = varargin{2};
@@ -75,10 +75,15 @@ classdef DataFilesClass < handle
             else
                 obj.config.RegressionTestActive=false;
             end
+            obj.config.SuppressErrorChecking = false;
             if ~isempty(askToFixNameConflicts)
                 obj.config.AskToFixNameConflicts = askToFixNameConflicts;
             elseif strcmp(cfg.GetValue('Fix File Name Conflicts'), sprintf('don''t ask again'))
                 obj.config.AskToFixNameConflicts = 0;
+            end
+            
+            if ~obj.config.AskToFixNameConflicts
+                obj.config.SuppressErrorChecking = true;                
             end
             
             if nargin==0
@@ -97,6 +102,10 @@ classdef DataFilesClass < handle
                 error('Invalid subject folder: ''%s''', obj.pathnm);
             end
             obj.findDataSet(obj.type);
+            
+            % Remove any files that cannot pass the basic test of loading
+            % its data
+            obj.ErrorCheck(obj.type);
             obj.ErrorCheckName();
         end
 
@@ -108,7 +117,7 @@ classdef DataFilesClass < handle
             % Remove any files that cannot pass the basic test of loading
             % its data
             obj.ErrorCheck(type);
-            
+
             if isempty( obj.files )                
                 % If there are no data files in current dir, don't give up yet - check
                 % the subdirs for data files.
@@ -297,6 +306,10 @@ classdef DataFilesClass < handle
         function ErrorCheck(obj, type)
             errorIdxs = [];
 
+            if isempty(obj.files)
+                return
+            end
+                       
             % Assume constructor name follows from name of data format type
             constructor = sprintf('%sClass', [upper(type(1)), type(2:end)]);
             
@@ -308,9 +321,13 @@ classdef DataFilesClass < handle
             
             % Try to create object of data type and load data into it
             for ii = 1:length(obj.files)
+                if obj.files(ii).isdir
+                    continue;
+                end
                 filename = [obj.files(ii).pathfull, obj.files(ii).name];
                 eval( sprintf('o = %s(filename);', constructor) );
                 if o.GetError()<0
+                    obj.logger.Write('FAILED error check:   %s will not be added to data set\n', filename);
                     errorIdxs = [errorIdxs, ii];
                 end
             end
