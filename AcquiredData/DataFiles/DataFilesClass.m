@@ -293,8 +293,6 @@ classdef DataFilesClass < handle
                     if strcmp(filesepStandard([ps,'/',fs], 'nameonly'), filesepStandard([pd,'/',fd], 'nameonly'))
                         found(ii) = 1;
                         break;
-                    else
-                        dbgpt = 1;
                     end
                 end
             end
@@ -320,6 +318,7 @@ classdef DataFilesClass < handle
             end
             
             % Try to create object of data type and load data into it
+            dataflag = false;
             for ii = 1:length(obj.files)
                 if obj.files(ii).isdir
                     continue;
@@ -328,10 +327,16 @@ classdef DataFilesClass < handle
                 eval( sprintf('o = %s(filename);', constructor) );
                 if o.GetError()<0
                     obj.logger.Write('FAILED error check:   %s will not be added to data set\n', filename);
-                    errorIdxs = [errorIdxs, ii];
+                    errorIdxs = [errorIdxs, ii]; %#ok<AGROW>
+                else
+                    dataflag = true;
                 end
             end
-            obj.files(errorIdxs) = [];
+            if dataflag==false
+                obj.files = FileClass.empty();
+            else
+            	obj.files(errorIdxs) = [];
+            end
         end
         
         
