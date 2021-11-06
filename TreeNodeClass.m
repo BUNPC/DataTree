@@ -747,7 +747,7 @@ classdef TreeNodeClass < handle
                 return;
             end
             if optionExists(options, 'legacy')
-                outputDirname = '';
+                outputDirname = ''; %#ok<*PROPLC>
             else
                 outputDirname = obj.outputDirname;
             end
