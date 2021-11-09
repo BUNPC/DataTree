@@ -309,6 +309,16 @@ classdef ProcStreamClass < handle
         end
         
         
+        
+        % ----------------------------------------------------------------------------------        
+        function SaveInitOutput(obj, pathname, filename)
+            obj.output.SaveInit(pathname, filename)
+        end
+        
+        
+        
+        
+        
         % ----------------------------------------------------------------------------------        
         function nbytes = MemoryRequired(obj)
             nbytes(1) = obj.input.MemoryRequired();

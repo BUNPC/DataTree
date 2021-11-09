@@ -154,6 +154,11 @@ classdef TreeNodeClass < handle
                 obj.iRun = obj2.iRun;
             end
             if ~isempty(obj2.procStream)
+                [pathname, filename] = fileparts([obj.path, obj.GetOutputFilename()]);                
+                if ispathvalid([filesepStandard(obj.path), obj.name], 'dir')
+                    pathname = [filesepStandard(pathname), obj.name];
+                end
+                obj.procStream.SaveInitOutput(pathname, filename);
                 obj.procStream.Copy(obj2.procStream, [obj.path, obj.GetOutputFilename()]);
             end
         end
@@ -829,7 +834,7 @@ classdef TreeNodeClass < handle
         
         % ------------------------------------------------------------
         function Print(obj, indent)
-            obj.logger.Write(sprintf('%s%s\n', blanks(indent), [obj.path, obj.procStream.output.SetFilename(obj.GetOutputFilename())] ));
+            obj.logger.Write('%s%s\n', blanks(indent), obj.procStream.output.SetFilename([obj.path, obj.GetOutputFilename()]) );
         end
 
         

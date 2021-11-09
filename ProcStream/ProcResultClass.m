@@ -169,20 +169,22 @@ classdef ProcResultClass < handle
             if isempty(filename)
                 return;
             end
-            [pname, fname] = fileparts(filename);
-            options = 'nameonly:dir';
-            if ispathvalid(fname) || ispathvalid(['../', fname], 'dir')
-                % Case 1: Flat group dir structure                
-                if ispathvalid([filename, '.mat'])
-                    % Loading: .mat file exists
-                    options = 'dir';
-                else
-                    options = 'nameonly:dir';                    
-                end
-                pname = filesepStandard([filesepStandard(pname, options), fname], 'nameonly:dir');
+            if ~exist('options', 'var')
+                options = '';
             end
-            filename = [filesepStandard(pname, options), fname, '.mat'];
-            obj.filename = filename;
+            
+            % It is important that this function can assume that the
+            % filename path + '.mat' exists
+            [pname, fname] = fileparts(filename);
+            pname = filesepStandard(pname);
+            if ispathvalid([pname, fname, '.mat'])
+                obj.filename = [pname, fname, '.mat'];
+            elseif ispathvalid([pname, fname, '/', fname, '.mat'])
+                obj.filename = [pname, fname, '/', fname, '.mat'];
+            else
+                obj.filename = '';
+            end
+            filename = obj.filename;
         end
         
         
@@ -208,7 +210,7 @@ classdef ProcResultClass < handle
                 end
             end
             
-            % If file name is not an empty string, save results to file and free memory
+            % If file name is not an empty string, save results to file and  ree memory
             % to save memory space
             if isempty(obj.filename)
                 return;
@@ -239,6 +241,25 @@ classdef ProcResultClass < handle
             if ~isempty(findstr('freememory', options)) %#ok<FSTR>
                 obj.FreeMemory();
             end
+        end
+        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function SaveInit(obj, pathname, filename)
+            if isempty(filename)
+                return
+            end
+            if ispathvalid([filesepStandard(pathname), filename, '.mat'])
+                return
+            end
+            if ~ispathvalid(pathname)
+                mkdir(pathname)
+            end
+            output = ProcResultClass();
+            
+            obj.logger.Write(sprintf('Initializing empty derived data output file:   %s', [filesepStandard(pathname), filename, '.mat']));
+            save([filesepStandard(pathname), filename, '.mat'], '-mat', 'output');
         end
         
         
@@ -670,17 +691,13 @@ classdef ProcResultClass < handle
             end            
             obj.SetFilename(filename);
             
-            % If file name is set and exists then load data from file
+            % If file name is set and exists then free memory for output 
+            % as a place holder for loading data from file when needed
             if ~isempty(filename) && exist(obj.filename, 'file')
             
                 obj.FreeMemory(filename);
                 
-            % If file name is set but does not exist then we should NOT
-            % copy from obj2 but instead save it to a file
-            elseif ~isempty(filename) && ~exist(obj.filename, 'file')
-                
-                obj.Save(obj2, filename, 'freememory');
-                
+            % Else copy obj2 to obj
             elseif isempty(filename)
             
 	            obj.dod = obj2.dod;
