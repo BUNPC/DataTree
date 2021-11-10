@@ -776,7 +776,6 @@ classdef TreeNodeClass < handle
         
         % ----------------------------------------------------------------------------------
         function status = Mismatch(obj, obj2)
-            global cfg
             status = 0;
             if exist('obj2','var')                
                 if obj == obj2
@@ -800,13 +799,9 @@ classdef TreeNodeClass < handle
             end
             obj.logger.Write([msg{:}])
             if strcmp(obj.GroupDataLoadWarnings, configFileOptions{1})
-                status = 0;
                 return;
             end
             selection = MenuBox(msg, choices, [], [], 'dontAskAgainOptions');
-            if selection(1)==1
-                status = 0;
-            end
             if length(selection)<2
                 selection(2)=0;
             end
@@ -816,8 +811,8 @@ classdef TreeNodeClass < handle
             if selection(2)>0
                 if ~strcmp(obj.GroupDataLoadWarnings, configFileOptions{selection(2)})
                     % Overwrite config value
-                    cfg.SetValue('Group Data Loading Warnings', configFileOptions{selection(2)});
-                    cfg.Save();
+                    obj.cfg.SetValue('Group Data Loading Warnings', configFileOptions{selection(2)});
+                    obj.cfg.Save();
                     obj.GroupDataLoadWarnings()
                 end
             end
@@ -861,6 +856,47 @@ classdef TreeNodeClass < handle
                 end
             end
         end
+        
+        
+        
+        % -------------------------------------------------------
+        function Rename(obj, namenew)
+            [pnameAcquiredNew, fnameAcquiredNew] = fileparts(namenew);
+            [pnameAcquired, fnameAcquired, ext] = fileparts(obj.name);            
+            filenameOutput = obj.GetOutputFilename();
+            [pnameDerived, fnameDerived] = fileparts(filenameOutput);
+            
+            pnameAcquired = filesepStandard(pnameAcquired);
+            pnameAcquiredNew = filesepStandard(pnameAcquiredNew, 'nameonly:dir');
+            pnameDerived = filesepStandard(pnameDerived);
+            
+            obj.logger.Write(sprintf('Renaming %s to %s', obj.name, namenew));
+
+            if ispathvalid([pnameAcquired, fnameAcquired, ext])
+                obj.logger.Write(sprintf('  Moving %s to %s', [pnameAcquired, fnameAcquired, ext], [pnameAcquiredNew, fnameAcquiredNew, ext]));
+                %movefile([filenameOutput, ext], [pnameAcquired, namenew, ext]);
+            end
+            
+            
+            % Dewrived data
+            if ispathvalid([pnameDerived, fnameDerived, '.mat'])
+                obj.logger.Write(sprintf('  Moving %s to %s', [pnameDerived, fnameDerived, '.mat'], [pnameAcquiredNew, namenew, '.mat']));
+                %movefile([filenameOutput, '.mat'], [pnameDerived, namenew, '.mat']);
+            elseif ispathvalid([pnameDerived, fnameDerived, '/', fnameDerived, '.mat'])
+                obj.logger.Write(sprintf('  Moving %s to %s', [pnameDerived, fnameDerived, '/', fnameDerived, '.mat'], ...
+                    [pnameDerived, fnameDerived, '/', namenew, '.mat']));
+                obj.logger.Write(sprintf('  Moving %s to %s', [pnameDerived, fnameDerived], ...
+                    [pnameAcquiredNew, namenew]));
+                %movefile([filenameOutput, '.mat'], [pnameDerived, namenew, '.mat']);
+            end
+            
+            if ispathvalid([pnameDerived, fnameDerived])
+                obj.logger.Write(sprintf('  Moving %s to %s', [pnameDerived, fnameDerived], [pnameDerived, fnameNew]));
+                %movefile([filenameOutput, ext], [pnameDerived, namenew, ext]);
+            end
+%             obj.name = [filesepStandard(pnameNew), fnameNew, ext];
+        end
+        
         
     end
 
@@ -914,11 +950,9 @@ classdef TreeNodeClass < handle
                 
         % --------------------------------------------------------------------------------
         function out = GroupDataLoadWarnings()
-            global cfg
-            
             persistent v;
             if ~exist('arg','var')
-                v = cfg.GetValue('Group Data Loading Warnings');
+                v = obj.cfg.GetValue('Group Data Loading Warnings');
             elseif exist('arg','var')
                 v = arg;
             end
