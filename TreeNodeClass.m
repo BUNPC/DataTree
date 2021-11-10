@@ -950,9 +950,11 @@ classdef TreeNodeClass < handle
                 
         % --------------------------------------------------------------------------------
         function out = GroupDataLoadWarnings()
+            global cfg
+            
             persistent v;
             if ~exist('arg','var')
-                v = obj.cfg.GetValue('Group Data Loading Warnings');
+                v = cfg.GetValue('Group Data Loading Warnings');
             elseif exist('arg','var')
                 v = arg;
             end
