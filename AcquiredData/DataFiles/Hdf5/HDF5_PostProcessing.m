@@ -13,4 +13,8 @@ if ischar(val) && ~iscell(val0)
     val = convertHDF5StrToMatlabStr(val);
 elseif ischar(val)
     val = convertHDF5StrToMatlabStr(val, 'cell');
+elseif iscell(val) && length(val) == 1
+    val = val{1};
+elseif iscell(val) && length(val) > 1
+    val = {val{:}}';
 end
