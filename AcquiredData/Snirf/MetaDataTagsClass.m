@@ -10,7 +10,6 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
         function obj = MetaDataTagsClass(varargin)
             % Set class properties not part of the SNIRF format
             obj.SetFileFormat('hdf5');
-
             obj.tags.SubjectID = 'default';
             obj.tags.MeasurementDate = datestr(now,29);
             obj.tags.MeasurementTime = datestr(now,'hh:mm:ss');
@@ -83,6 +82,7 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
                 err = -1;
                 
             end
+            obj.SetError(err);
             
         end
         
@@ -175,10 +175,12 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
         
         
         % ----------------------------------------------------------------------------------
-        function Set(obj, name, val) %#ok<INUSL>
-            eval(sprintf('obj.tags.%s = %s;', name, val));
-        end
-        
+        function Set(obj, name, value)
+            if ~exist('name', 'var') || ~exist('value', 'var')
+                retrun
+            end                                     
+            eval( sprintf('obj.tags.%s = ''%s'';', name, value) )   
+        end        
         
         % ----------------------------------------------------------------------------------
         function SetLengthUnit(obj, unit)
