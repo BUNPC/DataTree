@@ -52,12 +52,15 @@ for ii = 1:length(strs)
             end
             if strcmp(strs{ii+jj}, 'path')
                 submodules{kk,2} = [pwd, '/', strs{ii+jj+2}];
+                submodules{kk,2}(submodules{kk,2}=='\') = '/';
             end
             if strcmp(strs{ii+jj}, 'path')
                 submodules{kk,3} = strs{ii+jj+2};
+                submodules{kk,3}(submodules{kk,3}=='\') = '/';
             end
             if strcmp(strs{ii+jj}, 'url')
                 submodules{kk,1} = strs{ii+jj+2};
+                submodules{kk,1}(submodules{kk,1}=='\') = '/';
             end
             jj = jj+1;
         end

@@ -8,6 +8,7 @@ function setpaths(options)
 %   setpaths(0)
 %
 currdir = pwd;
+global logger
 
 try
     
@@ -28,7 +29,10 @@ try
     end
     
     % Add libraries on which DataTreeClass depends
-    addDependenciesSearchPaths()    
+    submodules = addDependenciesSearchPaths();    
+
+    % Start logger only after adding library paths. Logger is in the Utils libary. 
+    logger = InitLogger([], 'setpaths');
     
     % Create list of possible known similar apps that may conflic with current
     % app
@@ -64,7 +68,7 @@ try
             if pathscompare_startup(appThis, p)
                 continue
             end
-            fprintf('Exclude paths for %s\n', p);
+            logger.Write('Exclude paths for %s\n', p);
             appExclList = [appExclList; p]; %#ok<AGROW>
         end
     end
@@ -76,11 +80,11 @@ try
             if jj > 1
                 p = filesepStandard_startup(fileparts(foo{jj}));
                 appExclList = [appExclList; p]; %#ok<AGROW>
-                fprintf('Exclude paths for %s\n', p);
+                logger.Write('Exclude paths for %s\n', p);
             else
                 p = filesepStandard_startup(fileparts(foo{jj}));
                 appInclList = [appInclList; p]; %#ok<AGROW>
-                fprintf('Include paths for %s\n', p);
+                logger.Write('Include paths for %s\n', p);
             end
         end
     end
@@ -117,41 +121,42 @@ try
     
     warning('on','MATLAB:rmpath:DirNotFound');
     
+    PrintSystemInfo(logger, ['DataTreeClass'; submodules(:,end)]);
+    logger.Close();
+    cd(currdir);
+    
 catch ME
     
+    printStack(ME)
+    if exist('logger','var')
+        logger.Close();
+    end
     cd(currdir);
-    close all force;
-    fclose all;
     rethrow(ME)
     
 end
 
-cd(currdir);
 
-
-% ---------------------------------------------------
-function d = dependencies()
-d = {
-    'Utils';
-    'FuncRegistry';
-    };
 
 
 % ---------------------------------------------------
 function setpermissions(appPath)
 if isunix() || ismac()
     if ~isempty(strfind(appPath, '/bin')) %#ok<*STREMP>
-        fprintf(sprintf('chmod 755 %s/*\n', appPath));
+        cmd = sprintf('chmod 755 %s/*\n', appPath);
+        logger.Write(cmd);
         files = dir([appPath, '/*']);
         if ~isempty(files)
-            system(sprintf('chmod 755 %s/*', appPath));
+            system(cmd);
         end
     end
 end
 
 
+
 % ----------------------------------------------------
 function addSearchPaths(appPaths)
+global logger
 if ischar(appPaths)
     p = genpath(appPaths);
     if ispc
@@ -168,12 +173,13 @@ for kk = 1:length(appPaths)
     addpath(appPaths{kk}, '-end');
     setpermissions(appPaths{kk});
 end
-fprintf('ADDED search paths for app %s\n', appPaths{1});
+logger.Write('ADDED search paths for app %s\n', appPaths{1});
 
 
 
 % ----------------------------------------------------
 function removeSearchPaths(app)
+global logger
 p = path;
 if ispc()
     delimiter = ';';
@@ -197,21 +203,23 @@ for kk = 1:length(p)
     end
 end
 close(h);
-fprintf('REMOVED search paths for app %s\n', app);
+logger.Write('REMOVED search paths for app %s\n', app);
 
 
 
 
 % ----------------------------------------------------
-function   addDependenciesSearchPaths()
+function  submodules = addDependenciesSearchPaths()
+global logger
 submodules = downloadDependencies();
 for ii = 1:size(submodules)
     submodulespath = [pwd, '/', submodules{ii,end}];
+    submodulespath(submodulespath=='\') = '/';
     if ~exist(submodulespath,'dir')
-        fprintf('ERROR: Could not find required dependency %s\n', submodules{ii,end})
+        logger.Write('ERROR: Could not find required dependency %s\n', submodules{ii,end})
         continue;
     end
-    fprintf('Adding searchpaths for submodule %s\n', submodulespath);
+    logger.Write('Adding searchpaths for submodule %s\n', submodulespath);
     addSearchPaths(submodulespath);
 end
 
@@ -269,6 +277,7 @@ C(kk:end) = [];
 
 % -------------------------------------------------------------------------
 function dotmfolders = findDotMFolders(subdir, exclList)
+global logger
 global MAXPATHLENGTH
 MAXPATHLENGTH = 8;
 
@@ -288,7 +297,7 @@ end
 subdirFullpath = filesepStandard(subdir,'full');
 
 if ~ispathvalid(subdirFullpath, 'dir')
-    fprintf('Warning: folder %s doesn''t exist\n', subdirFullpath);
+    logger.Write('Warning: folder %s doesn''t exist\n', subdirFullpath);
     return;
 end
 
