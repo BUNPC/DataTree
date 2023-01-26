@@ -68,7 +68,7 @@ try
             if pathscompare_startup(appThis, p)
                 continue
             end
-            logger.Write('Exclude paths for %s\n', p);
+            printMethod(sprintf('Exclude paths for %s\n', p));
             appExclList = [appExclList; p]; %#ok<AGROW>
         end
     end
@@ -80,7 +80,7 @@ try
             if jj > 1
                 p = filesepStandard_startup(fileparts(foo{jj}));
                 appExclList = [appExclList; p]; %#ok<AGROW>
-                logger.Write('Exclude paths for %s\n', p);
+                printMethod(sprintf('Exclude paths for %s\n', p));
             else
                 p = filesepStandard_startup(fileparts(foo{jj}));
                 appInclList = [appInclList; p]; %#ok<AGROW>
@@ -156,7 +156,6 @@ end
 
 % ----------------------------------------------------
 function addSearchPaths(appPaths)
-global logger
 if ischar(appPaths)
     p = genpath(appPaths);
     if ispc
@@ -173,13 +172,12 @@ for kk = 1:length(appPaths)
     addpath(appPaths{kk}, '-end');
     setpermissions(appPaths{kk});
 end
-logger.Write('ADDED search paths for app %s\n', appPaths{1});
+printMethod(sprintf('ADDED search paths for app %s\n', appPaths{1}));
 
 
 
 % ----------------------------------------------------
 function removeSearchPaths(app)
-global logger
 p = path;
 if ispc()
     delimiter = ';';
@@ -203,7 +201,7 @@ for kk = 1:length(p)
     end
 end
 close(h);
-logger.Write('REMOVED search paths for app %s\n', app);
+printMethod(sprintf('REMOVED search paths for app %s\n', app));
 
 
 
@@ -216,10 +214,10 @@ for ii = 1:size(submodules)
     submodulespath = [pwd, '/', submodules{ii,end}];
     submodulespath(submodulespath=='\') = '/';
     if ~exist(submodulespath,'dir')
-        logger.Write('ERROR: Could not find required dependency %s\n', submodules{ii,end})
+        printMethod(sprintf('ERROR: Could not find required dependency %s\n', d{ii}));
         continue;
     end
-    logger.Write('Adding searchpaths for submodule %s\n', submodulespath);
+    printMethod(sprintf('Adding searchpaths for submodule %s\n', submodulespath));
     addSearchPaths(submodulespath);
 end
 
@@ -271,6 +269,17 @@ while ii<=length(j)
     kk=kk+1;
 end
 C(kk:end) = [];
+
+
+
+% -------------------------------------------------------------------------
+function printMethod(msg)
+global logger
+if isa(logger', 'Logger')
+    logger.Write(msg);
+else
+    fprintf(msg);
+end
 
 
 
