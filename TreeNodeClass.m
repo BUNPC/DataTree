@@ -40,7 +40,7 @@ classdef TreeNodeClass < handle
 
             obj.logger              = logger;
             obj.cfg                 = cfg;
-            
+
             obj.DEBUG = 0;
             
             obj.name = '';
