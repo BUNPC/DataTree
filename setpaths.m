@@ -227,7 +227,7 @@ printMethod(sprintf('REMOVED search paths for app %s\n', app));
 
 
 % ----------------------------------------------------
-function  d = addDependenciesSearchPaths()
+function   d = addDependenciesSearchPaths()
 submodules = downloadDependencies();
 d = cell(size(submodules,1),1);
 for ii = 1:size(submodules)    
