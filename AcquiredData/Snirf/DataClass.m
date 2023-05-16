@@ -138,7 +138,6 @@ classdef DataClass < FileLoadSaveClass
                return;
             end
             
-            
             try
                 % Open group
                 [gid, fid] = HDF5_GroupOpen(fileobj, location);
@@ -183,6 +182,7 @@ classdef DataClass < FileLoadSaveClass
         end
         
         
+        
         % -------------------------------------------------------
         function err = LoadTime(obj, fileobj, location)
             err = 0;
@@ -205,11 +205,6 @@ classdef DataClass < FileLoadSaveClass
             elseif isempty(fileobj)
                 fileobj = obj.GetFilename();
             end
-            if isempty(fileobj)
-               err = -1;
-               return;
-            end
-            
             
             try
                 % Open group
@@ -222,13 +217,13 @@ classdef DataClass < FileLoadSaveClass
             catch
                 err = -1;
             end
-            
             err = ErrorCheck(obj, err, {'time'});
         end
         
         
         % -------------------------------------------------------
-        function SaveHdf5(obj, fileobj, location)
+        function err = SaveHdf5(obj, fileobj, location)
+            err = 0;
             if ~exist('fileobj', 'var') || isempty(fileobj)
                 error('Unable to save file. No file name given.')
             end
@@ -240,16 +235,17 @@ classdef DataClass < FileLoadSaveClass
                 location = ['/',location];
             end
             
-            if ~exist(fileobj, 'file')
-                fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
-                H5F.close(fid);
+            fid = HDF5_GetFileDescriptor(fileobj);
+            if fid < 0
+                err = -1;
+                return;
             end
             
-            hdf5write_safe(fileobj, [location, '/dataTimeSeries'], obj.dataTimeSeries, 'array');
-            hdf5write_safe(fileobj, [location, '/time'], obj.time, 'array');
+            hdf5write_safe(fid, [location, '/dataTimeSeries'], obj.dataTimeSeries, 'array');
+            hdf5write_safe(fid, [location, '/time'], obj.time, 'array');
             
-            for ii=1:length(obj.measurementList)
-                obj.measurementList(ii).SaveHdf5(fileobj, [location, '/measurementList', num2str(ii)]);
+            for ii = 1:length(obj.measurementList)
+                obj.measurementList(ii).SaveHdf5(fid, [location, '/measurementList', num2str(ii)]);
             end
         end
         
@@ -494,8 +490,10 @@ classdef DataClass < FileLoadSaveClass
             %                        will follow this order in linear form. That is, the order of ml will index the columns 
             %                        of d squeezed into 2 dimensions d(:,:)
             %       
-            %           'matrix'   - dataTimeSeries will not be modified but ml will be returned as a 2D matrix instead of a 
-            %                        MeasListClass structure. It's rows will have the same order as the structure elements. 
+            %           'matrix'   - This options refers to the measurement list type: if 'matrix' keyword is in the options 
+            %                        then ml will be returned as a 2D matrix instead of a MeasListClass object (that is the 
+            %                        object representing the measurementList SNIRF field). The rows of the 2d array will have 
+            %                        the same order as the original MeasListClass object elements. 
             %       
             %           'datatype' - used in combination with reshape. dataTimeSeries will be reshaped as above but the 
             %                        slowest dimensions to change will be reversed from left-to-right, that is, 
@@ -510,7 +508,7 @@ classdef DataClass < FileLoadSaveClass
             %       %%%% dc is a DataClass object containing concentration data, with 4 sources, 8 detectors, 9 sd pairs, and 3 Hb data types:  hbo, hbr, and hbt. 
             %
             %
-            %       % Example 1:  Return OD dataTimeSeries, time and  measurementList unchanged.
+            %       % Example 1:  Return OD dataTimeSeries, time and  measurementList (ml) unchanged, that is, as a MeasListClass object instead of Nx4 2D array.
             %       [d, t, ml, order] = dod.GetDataTimeSeries();
             %
             %
@@ -768,6 +766,9 @@ classdef DataClass < FileLoadSaveClass
             if ~contains(options, 'matrix')
                 ml = obj.measurementList;
                 ml(order) = ml;
+            end
+            if contains(options, 'reshape')
+                ml = measurementListSDpairs;
             end
 
             obj.SimulateErrors(d);
@@ -1035,8 +1036,29 @@ classdef DataClass < FileLoadSaveClass
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     methods
         
+        
+        
         % ----------------------------------------------------------------------------------
         function Copy(obj, obj2)
+            if isempty(obj)
+                obj = DataClass();
+            end
+            if isempty(obj2)
+                obj = DataClass();
+                return;
+            end
+            if ~isa(obj2, 'DataClass')
+                return;
+            end
+            obj.CopyMeasurementList(obj2);
+            obj.dataTimeSeries = obj2.dataTimeSeries;
+            obj.time = obj2.time;
+        end
+        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function CopyMeasurementList(obj, obj2)
             if isempty(obj)
                 obj = DataClass();
             end
@@ -1050,9 +1072,8 @@ classdef DataClass < FileLoadSaveClass
             for ii=1:length(obj2.measurementList)
                 obj.measurementList(ii) = obj2.measurementList(ii).copy();      % shallow copy ok because MeasListClass has no handle properties
             end
-            obj.dataTimeSeries = obj2.dataTimeSeries;
-            obj.time = obj2.time;
         end
+        
         
         
         % -------------------------------------------------------
@@ -1068,7 +1089,11 @@ classdef DataClass < FileLoadSaveClass
                 return;
             end
             if ~all(obj.dataTimeSeries(:)==obj2.dataTimeSeries(:))
-                return;
+                obj.dataTimeSeries( isnan(obj.dataTimeSeries(:)) | isinf(obj.dataTimeSeries(:)) ) = 0;
+                obj2.dataTimeSeries( isnan(obj2.dataTimeSeries(:)) | isinf(obj2.dataTimeSeries(:)) ) = 0;
+                if ~all(obj.dataTimeSeries(:)==obj2.dataTimeSeries(:))
+                    return;
+                end
             end
             if ~all(obj.time(:)==obj2.time(:))
                 return;
@@ -1076,6 +1101,16 @@ classdef DataClass < FileLoadSaveClass
             if length(obj.measurementList)~=length(obj2.measurementList)
                 return;
             end
+            if ~obj.EqualMeasurementLists(obj2)
+                return;
+            end
+            B = true;
+        end
+        
+        
+        % -------------------------------------------------------
+        function B = EqualMeasurementLists(obj, obj2)
+            B = false;
             for ii=1:length(obj.measurementList)
                 if obj.measurementList(ii)~=obj2.measurementList(ii)
                     return;

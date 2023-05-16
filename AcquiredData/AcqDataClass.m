@@ -92,7 +92,6 @@ classdef AcqDataClass < matlab.mixin.Copyable
             if ~ischar(fileobj)
                 fileobj = '';
             end
-            obj.LoadBids(fileobj);           
         end
 
 
@@ -162,7 +161,11 @@ classdef AcqDataClass < matlab.mixin.Copyable
             if isempty(file)
                 return
             end
-            obj.bids.stim = readTsv([filesepStandard(p), file(1).name],'numstr2num');
+            [obj.bids.stim, err] = readTsv([filesepStandard(p), file(1).name],'numstr2num');
+%             if err < 0
+%                 obj.SetError(-8);
+%                 return;
+%             end
             if isempty(obj.bids.stim)
                 return
             end
@@ -209,39 +212,6 @@ classdef AcqDataClass < matlab.mixin.Copyable
                 return;
             end            
             obj.Initialize();
-        end
-        
-        
-        
-        % ---------------------------------------------------------
-        function bbox = GetSdgBbox(obj)
-            bbox = [];
-            
-            optpos = [obj.GetSrcPos('2D'); obj.GetDetPos('2D')];
-            if isempty(optpos)
-                return
-            end
-            
-            xmax = max(optpos(:,1));
-            ymax = max(optpos(:,2));
-
-            xmin = min(optpos(:,1));
-            ymin = min(optpos(:,2));
-            
-            width = xmax-xmin;
-            height = ymax-ymin;
-            
-            if width==0
-                width = 1;
-            end
-            if height==0
-                height = 1;
-            end
-            
-            px = width * 0.05; 
-            py = height * 0.05; 
-
-            bbox = [xmin-px, xmax+px, ymin-py, ymax+py];
         end
         
         

@@ -16,8 +16,8 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
             obj.tags.LengthUnit = 'mm';
             obj.tags.TimeUnit = 'unknown';
             obj.tags.FrequencyUnit = 'unknown';
-            obj.tags.AppName  = 'snirf-homer3';
-            
+            obj.tags.AppName  = 'homer3-DataTree';
+
             if nargin==1 && ~isempty(varargin{1})
                 obj.SetFilename(varargin{1});
                 obj.Load();
@@ -83,12 +83,14 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
                 
             end
             obj.SetError(err);
-            
+
         end
         
         
         % -------------------------------------------------------
-        function SaveHdf5(obj, fileobj, location) %#ok<*INUSD>
+        function err = SaveHdf5(obj, fileobj, location) %#ok<*INUSD>
+            err = 0;
+            
             % Arg 1
             if ~exist('fileobj', 'var') || isempty(fileobj)
                 error('Unable to save file. No file name given.')
@@ -101,13 +103,15 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
                 location = ['/',location]; %#ok<*NASGU>
             end
             
-            if ~exist(fileobj, 'file')
-                fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
-                H5F.close(fid);
+            fid = HDF5_GetFileDescriptor(fileobj);
+            if fid < 0
+                err = -1;
+                return;
             end
-            props = propnames(obj.tags);
-            for ii=1:length(props)
-                eval(sprintf('hdf5write_safe(fileobj, [location, ''/%s''], obj.tags.%s);', props{ii}, props{ii}));
+                        
+            props = propnames(obj.tags);            
+            for ii = 1:length(props)
+                eval(sprintf('hdf5write_safe(fid, [location, ''/%s''], obj.tags.%s);', props{ii}, props{ii}));
             end
         end
         
@@ -188,6 +192,16 @@ classdef MetaDataTagsClass  < FileLoadSaveClass
                 return
             end
             obj.tags.LengthUnit = unit;
+        end
+        
+        
+        % ----------------------------------------------------------------------------------
+        function val = GetLengthUnit(obj)
+            val = '';
+            if isempty(obj)
+                return
+            end
+            val = obj.tags.LengthUnit;
         end
         
         

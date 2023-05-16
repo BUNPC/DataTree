@@ -144,7 +144,9 @@ classdef StimClass < FileLoadSaveClass
         
         
         % -------------------------------------------------------
-        function SaveHdf5(obj, fileobj, location)
+        function err = SaveHdf5(obj, fileobj, location)
+            err = 0;
+
             if isempty(obj.data)
                 obj.data = 0;
             end
@@ -161,11 +163,13 @@ classdef StimClass < FileLoadSaveClass
                 location = ['/',location];
             end
 
-            if ~ispathvalid(fileobj, 'file')
-                fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
-                H5F.close(fid);
+            % Convert file object to HDF5 file descriptor
+            fid = HDF5_GetFileDescriptor(fileobj);
+            if fid < 0
+                err = -1;
+                return;
             end
-            
+                        
             if obj.debuglevel.Get() == obj.debuglevel.SimulateBadData()
                 obj.SimulateBadData();
             end
@@ -463,18 +467,9 @@ classdef StimClass < FileLoadSaveClass
             end
             if length(amp) < length(tPts)
                 amp = [amp; ones(length(tPts)-length(amp),1)];
-            end
-            
-            if isempty(obj.data)
-                obj.data = [tPts, duration, amp, more];
-            else
-                obj.data(end+1,:) = [tPts, duration, amp, more];                
-                end
-            if isempty(obj.states)
-                obj.states = [tPts, ones(length(tPts),1)];
-            else
-                obj.states(end+1,:) = [tPts, ones(length(tPts),1)];
-            end
+            end            
+            obj.data = [obj.data; tPts, duration, amp, more];
+            obj.states = [obj.states; tPts, ones(length(tPts),1)];
         end
 
         
@@ -486,13 +481,8 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('amp','var')
                 amp = 1;
             end
-            for ii=1:length(tPts)
-                k = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
-                if isempty(k)
-                    continue;
-                end
-                obj.data(k,3) = amp;
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
+            obj.data(k,3) = amp;            
         end
 
         
@@ -504,13 +494,8 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('state','var')
                 state = 1;
             end
-            for ii=1:length(tPts)
-                k = find( abs(obj.states(:,1)-tPts(ii)) < obj.errmargin );
-                if isempty(k)
-                    continue;
-                end
-                obj.states(k,2) = state;
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
+            obj.states(k,2) = state;
         end
         
         
@@ -543,6 +528,22 @@ classdef StimClass < FileLoadSaveClass
         end
         
         
+        % -------------------------------------------------------
+        function k = GetIncludedStimIdxs(obj, tPts)
+            k = [];
+            if length(tPts)<2
+                errmargin = obj.errmargin;
+            else
+                errmargin = mean(diff(tPts));
+            end
+            for ii = 1:size(obj.data,1)
+                if ~isempty(find( abs(obj.data(ii,1)-tPts) < errmargin))
+                    k = [k; ii];
+                end
+            end
+        end        
+        
+        
         % ----------------------------------------------------------------------------------
         function SetDuration(obj, duration, tPts)
             if isempty(obj.data)
@@ -554,13 +555,7 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('tPts','var')
                 tPts = obj.data(:,1);
             end
-            k=[];
-            for ii=1:length(tPts)
-                k(ii) = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
-                if isempty(k)
-                    continue;
-                end
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
             obj.data(k,2) = duration;
         end
 
@@ -574,10 +569,7 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('tPts','var')
                 tPts = obj.data(:,1);
             end
-            k = [];
-            for ii=1:length(tPts)
-                k(ii) = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
-            end            
+            k = GetIncludedStimIdxs(obj, tPts);
             duration = obj.data(k,2);
         end
         
@@ -593,13 +585,7 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('tPts','var')
                 tPts = obj.data(:,1);
             end
-            k=[];
-            for ii=1:length(tPts)
-                k(ii) = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
-                if isempty(k)
-                    continue;
-                end
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
             obj.data(k,3) = amps;
         end
 
@@ -613,10 +599,7 @@ classdef StimClass < FileLoadSaveClass
             if ~exist('tPts','var')
                 tPts = obj.data(:,1);
             end
-            k = [];
-            for ii=1:length(tPts)
-                k(ii) = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
             amps = obj.data(k,3);
         end
         
@@ -629,11 +612,7 @@ classdef StimClass < FileLoadSaveClass
             
             % Find all stims for any conditions which match the time points and 
             % delete them from data. 
-            k = [];
-            j = [];
-            for ii=1:length(tPts)
-                k = [k, find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin )];
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
             obj.data(k,:) = [];
             obj.states(k,:) = [];
         end
@@ -648,10 +627,7 @@ classdef StimClass < FileLoadSaveClass
             
             % Find all stims for any conditions which match the time points and 
             % flip their states
-            k = [];
-            for ii=1:length(tPts)
-                k = [k, find( abs(obj.states(:,1)-tPts(ii)) < obj.errmargin )];
-            end
+            k = GetIncludedStimIdxs(obj, tPts);
             obj.states(k,2) = -1*obj.states(k,2);
         end
         

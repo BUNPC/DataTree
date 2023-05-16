@@ -455,7 +455,10 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         function err = LoadStim(obj, fileobj)
             err = 0;
             
-            if obj.LoadStimOverride(obj.GetFilename())                
+            if obj.LoadStimOverride(obj.GetFilename())
+%                 if obj.GetError()<0
+%                     err = -1;
+%                 end
                 return
             end
             
@@ -507,11 +510,15 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         
         % -------------------------------------------------------
         function err = LoadProbe(obj, fileobj, ~)
+            % metaDataTags is a prerequisite for load probe, so check to make sure its already been loaded
+            if isempty(obj.metaDataTags)
+                obj.LoadMetaDataTags(fileobj);
+            end
+                
             % get lenth unit through class method
             LengthUnit = obj.metaDataTags.Get('LengthUnit');
             obj.probe = ProbeClass();
             err = obj.probe.LoadHdf5(fileobj, [obj.location, '/probe'], LengthUnit);
-            obj.metaDataTags.Set('LengthUnit','mm');
             
             % This is a required field. If it's empty means the whole snirf object is bad
             if isempty(obj.probe)
@@ -658,7 +665,7 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         
         % -------------------------------------------------------
         function SaveData(obj, fileobj)
-            for ii=1:length(obj.data)
+            for ii = 1:length(obj.data)
                 obj.data(ii).SaveHdf5(fileobj, [obj.location, '/data', num2str(ii)]);
             end
         end
@@ -694,8 +701,11 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         end
         
         
+        
         % -------------------------------------------------------
-        function SaveHdf5(obj, fileobj, ~)
+        function err = SaveHdf5(obj, fileobj, ~)
+            err = 0;
+            
             % Arg 1
             if ~exist('fileobj','var') || isempty(fileobj)
                 error('Unable to save file. No file name given.')
@@ -705,31 +715,49 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
             if exist(fileobj, 'file')
                 delete(fileobj);
             end
-            obj.fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
-            H5F.close(obj.fid);
+
+            % Convert file object to HDF5 file descriptor
+            obj.fid = HDF5_GetFileDescriptor(fileobj);
+            if obj.fid < 0
+                err = -1;
+                return;
+            end
             
             %%%%% Save this object's properties
-            
-            % Save formatVersion
-            if isempty(obj.formatVersion)
-                obj.formatVersion = '1.1';
+            try
+                
+                % Save formatVersion
+                if isempty(obj.formatVersion)
+                    obj.formatVersion = '1.1';
+                end
+                hdf5write_safe(obj.fid, '/formatVersion', obj.formatVersion);
+                
+                % Save metaDataTags
+                obj.SaveMetaDataTags(obj.fid);
+                
+                % Save data
+                obj.SaveData(obj.fid);
+                
+                % Save stim
+                obj.SaveStim(obj.fid);
+                
+                % Save sd
+                obj.SaveProbe(obj.fid);
+                
+                % Save aux
+                obj.SaveAux(obj.fid);
+                
+            catch ME
+                
+                H5F.close(obj.fid);
+                if ispathvalid(fileobj)
+                    delete(fileobj);
+                end
+                rethrow(ME)
+                
             end
-            hdf5write_safe(fileobj, '/formatVersion', obj.formatVersion);
             
-            % Save metaDataTags
-            obj.SaveMetaDataTags(fileobj);
-            
-            % Save data
-            obj.SaveData(fileobj);
-            
-            % Save stim
-            obj.SaveStim(fileobj);
-            
-            % Save sd
-            obj.SaveProbe(fileobj);
-            
-            % Save aux
-            obj.SaveAux(fileobj);
+            H5F.close(obj.fid);
         end
         
         
@@ -1040,6 +1068,12 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
             val = obj.metaDataTags.Get('LengthUnit');
         end
         
+        
+        % ---------------------------------------------------------
+        function bbox = GetSdgBbox(obj)
+            bbox = obj.probe.GetSdgBbox();
+        end                
+        
     end
     
     
@@ -1070,11 +1104,17 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
             if ~exist('iBlk','var') || isempty(iBlk)
                 iBlk = 1;
             end
+            freememory = false;
+            if isempty(obj.data)
+                obj.LoadData(obj.GetFilename());
+                freememory = true;
+            end
             if iBlk>length(obj.data)
                 return;
             end
-            for ii = 1:length(iBlk)
-                ml = [ml; obj.data(ii).GetMeasurementList(matrixMode)];
+            ml = obj.data(iBlk).GetMeasurementList(matrixMode);
+            if freememory 
+                obj.FreeMemory(obj.GetFilename());
             end
         end
         
@@ -1273,7 +1313,8 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         
         % ---------------------------------------------------------
         function probe = GetProbe(obj)
-           probe = obj.probe; 
+            obj.LoadProbe(obj.GetFilename());
+            probe = obj.probe;
         end
         
         
@@ -1298,22 +1339,20 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         
         
         % ---------------------------------------------------------
-        function srcpos = GetSrcPos(obj,option)
-            if exist('option','var')
-                srcpos = obj.probe.GetSrcPos(option);
-            else
-                srcpos = obj.probe.GetSrcPos();
+        function srcpos = GetSrcPos(obj, options)
+            if exist(options,'var')
+                options = '';
             end
+            srcpos = obj.probe.GetSrcPos(options);
         end
         
         
         % ---------------------------------------------------------
-        function detpos = GetDetPos(obj,option)
-            if exist('option','var')
-                detpos = obj.probe.GetDetPos(option);
-            else
-                detpos = obj.probe.GetDetPos();
+        function detpos = GetDetPos(obj, options)
+            if exist(options,'var')
+                options = '';
             end
+            detpos = obj.probe.GetDetPos(options);
         end
         
         
@@ -1776,6 +1815,79 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
             fprintf('\n');
             
         end
+        
+        
+        
+        % -----------------------------------------------------------------------
+        function [md2d, md3d] = GetChannelsMeanDistance(obj)
+            ml = obj.data(1).GetMeasListSrcDetPairs();
+            d1 = zeros(size(ml,1),1);
+            for ii = 1:length(d1)
+                d1(ii) = dist3(obj.probe.sourcePos2D(ml(ii,1),:), obj.probe.detectorPos2D(ml(ii,2),:)); 
+                d2(ii) = dist3(obj.probe.sourcePos3D(ml(ii,1),:), obj.probe.detectorPos3D(ml(ii,2),:)); 
+            end
+            md2d = mean(d1);
+            md3d = mean(d2);
+        end
+        
+        
+        
+        % -----------------------------------------------------------------------
+        function err = ErrorCheckSpatialUnits(obj)
+            err = 0;
+            msg = [];
+            [md2d, md3d] = obj.GetChannelsMeanDistance();
+            LengthUnitDeclared = obj.metaDataTags.GetLengthUnit();            
+            magnitudeMm = log10(30);
+            magnitudeCm = log10(3);
+            magnitudeM  = log10(.03);
+            
+            % 2D coordinates
+            diffMm = abs(magnitudeMm - log10(md2d));
+            diffCm = abs(magnitudeCm - log10(md2d));
+            diffM = abs(magnitudeM - log10(md2d));
+            [~, idx] =  min([diffMm, diffCm, diffM]);
+            if idx == 1
+                LengthUnitActual2D = 'mm';
+            elseif idx == 2
+                LengthUnitActual2D = 'cm';
+            elseif idx == 3
+                LengthUnitActual2D = 'm';
+            end
+            if ~strcmpi(LengthUnitDeclared, LengthUnitActual2D)
+                msg{1} = sprintf('WARNING: Declared LengthUnit (%s) might not match the likely actual units (%s) of the 2D coordinates\n', ...
+                    LengthUnitDeclared, LengthUnitActual2D);
+            end
+            
+            % 2D coordinates
+            diffMm = abs(magnitudeMm - log10(md3d));
+            diffCm = abs(magnitudeCm - log10(md3d));
+            diffM = abs(magnitudeM - log10(md3d));
+            [~, idx] =  min([diffMm, diffCm, diffM]);
+            if idx == 1
+                LengthUnitActual3D = 'mm';
+            elseif idx == 2
+                LengthUnitActual3D = 'cm';
+            elseif idx == 3
+                LengthUnitActual3D = 'm';
+            end
+            if ~strcmpi(LengthUnitDeclared, LengthUnitActual3D)
+                msg{2} = sprintf('WARNING: Declared LengthUnit (%s) might not match the likely actual units (%s) of the 3D coordinates\n\n', ...
+                    LengthUnitDeclared, LengthUnitActual3D);
+            end
+            
+            % Compare 2D units with 3D units
+            if ~strcmpi(LengthUnitActual2D, LengthUnitActual3D)
+                msg{3} = sprintf('WARNING: The likely actual units of the 2D coordinates (%s) might not match the like actual units of the 3D coordinates (%s)\n\n', ...
+                    LengthUnitActual3D, LengthUnitActual3D);
+            end
+            
+            if ~isempty(msg)
+                MenuBox(msg);
+            end
+        end
+        
+        
         
     end
     

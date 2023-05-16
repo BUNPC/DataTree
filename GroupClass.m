@@ -2,7 +2,6 @@ classdef GroupClass < TreeNodeClass
     
     properties % (Access = private)
         version;
-        versionStr;
         subjs;
     end
     
@@ -10,6 +9,7 @@ classdef GroupClass < TreeNodeClass
         outputFilename
         oldDerivedPaths
         derivedPathBidsCompliant
+        initsaveflag
     end
     
     
@@ -25,11 +25,8 @@ classdef GroupClass < TreeNodeClass
             obj.InitVersion();
             obj.oldDerivedPaths = {obj.path, [obj.path, 'homerOutput']};
             obj.derivedPathBidsCompliant = 'derivatives/homer';
-            
-            if nargin<3 || ~strcmp(varargin{3}, 'noprint')
-                obj.logger.Write('Current GroupClass version %s\n', obj.GetVersionStr());
-            end
-            
+            obj.initsaveflag = false;
+                        
             obj.type    = 'group';
             obj.subjs   = SubjClass().empty;
                         
@@ -69,39 +66,13 @@ classdef GroupClass < TreeNodeClass
         
         % ----------------------------------------------------------------------------------
         function InitVersion(obj)
-            obj.SetVersion();
-            obj.InitVersionStrFull();
+            obj.SetVersion(getVernum('DataTree'));
         end
         
         
         % ----------------------------------------------------------------------------------
         function SetVersion(obj, vernum)
-            % Version number should be incremented whenever properties are added, deleted or changed in 
-            % GroupClass, SubjectClass, RunClass OR acquisition class, like AcqDataClass, SnirfClass and 
-            % its sub-classes or NirsClass 
-            
-            if nargin==1
-                obj.version{1} = '2';   % Major version #
-                obj.version{2} = '0';   % Major sub-version #
-                obj.version{3} = '0';   % Minor version #
-                obj.version{4} = '0';   % Minor sub-version # or patch #: 'p1', 'p2', etc
-            elseif iscell(vernum)
-                if ~isnumber([vernum{:}])
-                    return;
-                end
-                for ii=1:length(vernum)
-                    obj.version{ii} = vernum{ii};
-                end
-            elseif ischar(vernum)
-                vernum = str2cell(vernum,'.');
-                if ~isnumber([vernum{:}])
-                    return;
-                end
-                obj.version = cell(length(vernum),1);
-                for ii=1:length(vernum)
-                    obj.version{ii} = vernum{ii};
-                end
-            end
+            obj.version = vernum;
         end
         
         
@@ -112,72 +83,25 @@ classdef GroupClass < TreeNodeClass
         
         
         % ----------------------------------------------------------------------------------
-        function verstr = GetVersionStr(obj)
-            verstr = version2string(obj.version);
-        end
-        
-        
-        % ----------------------------------------------------------------------------------
         function filename = GetFilename(obj)
             filename = obj.outputFilename;
         end
         
         
         % ----------------------------------------------------------------------------------
-        function InitVersionStrFull(obj)
-            if isempty(obj.version)
-                return;
-            end
-            verstr = version2string(obj.version);
-            obj.versionStr = sprintf('GroupClass v%s', verstr);
-        end
-        
-        
-        % ----------------------------------------------------------------------------------
         function res = CompareVersions(obj, obj2)
-            res = 1;
-            if ~isproperty(obj, 'version')
-                return;
-            elseif ~ischar(obj2.version) && ~iscell(obj2.version) 
-                return;
-            elseif ischar(obj2.version)
-                if ~isnumber(obj2.version)
-                    return;                    
-                end
-                v2 = str2cell(obj2.version,'.');
-            elseif iscell(obj2.version)
-                v2 = obj2.version;
-            end
-            v1 = obj.version;
-            
-            for ii=1:length(v1)
-                v1{ii} = str2num(v1{ii}); %#ok<*ST2NM>
-            end
-            for ii=1:length(v2)
-                v2{ii} = str2num(v2{ii});
+            v1 = versionstr2num(obj.version);
+            v2 = versionstr2num(obj2.version);
+            if v1 == v2
+                res = 0;
+            elseif v1 < v2
+                res = 1;
+            elseif v1 > v2
+                res = -1;
             end
             
-            % Now that we have the version numbers of both objects, we can
-            % do an actual numeric comparison
+            % TBD: not sure how to handle this. For now just return 0
             res = 0;
-            for ii=1:max(length(v1), length(v2))
-                if ii>length(v1)
-                    res = -1;
-                    break;
-                end
-                if ii>length(v2)
-                    res = 1;
-                    break;
-                end
-                if v1{ii}>v2{ii}
-                    res = 1;
-                    break;
-                end
-                if v1{ii}<v2{ii}
-                    res = -1;
-                    break;
-                end
-            end
         end
         
         
@@ -409,6 +333,7 @@ classdef GroupClass < TreeNodeClass
                     g.CopyFcalls(o.procStream, o.type);
                     
                 end
+                obj.initsaveflag = true;
                 
             end
         end
@@ -466,13 +391,19 @@ classdef GroupClass < TreeNodeClass
         
         
         % ----------------------------------------------------------------------------------
-        function InitProcStream(obj, procStreamCfgFile)
+        function InitProcStream(obj, procStreamCfgFile, options)
             if isempty(obj)
                 return;
             end
-            
             if ~exist('procStreamCfgFile','var')
                 procStreamCfgFile = '';
+            end
+            if ~exist('options','var')
+                options = '';
+            end
+            
+            if optionExists(options, 'noloadconfig')
+            	return
             end
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -491,7 +422,6 @@ classdef GroupClass < TreeNodeClass
             
             obj.ErrorCheckInitErr(procStreamCfgFile, status);                        
         end
-        
         
         
         
@@ -730,7 +660,7 @@ classdef GroupClass < TreeNodeClass
                 if isproperty(g, 'group') && isa(g.group, 'GroupClass')
                     if isproperty(g.group, 'version')
                         if ismethod(g.group, 'GetVersion')
-                            obj.logger.Write('Saved group data, version %s exists\n', g.group.GetVersionStr());
+                            % obj.logger.Write('Saved group data, version %s exists\n', g.group.GetVersionStr());
                             group = g.group;
                         end
                     end
@@ -739,7 +669,7 @@ classdef GroupClass < TreeNodeClass
             
             % Copy saved group to current group if versions are compatible. obj.CompareVersions==0 
             % means the versions of the saved group and current one are equal.
-            if ~isempty(group) && obj.CompareVersions(group)<=0
+            if ~isempty(group) && obj.CompareVersions(group) >= 0
                 % Do a conditional copy of group from saved processing output file. Conditional copy copies ONLY 
                 % derived data, that is, only from procStream but NOT acqruired. We do not want to 
                 % overwrite the real acquired data loaded from acquisition files 
@@ -747,12 +677,7 @@ classdef GroupClass < TreeNodeClass
                 obj.Copy(group, 'conditional');
                 close(hwait);
             else
-                if exist([obj.path, obj.outputDirname, obj.outputFilename],'file')
-                    obj.logger.Write('Warning: This folder contains old version of processing results. Will move it to *_old.mat\n');
-                    [~,outputFilename] = fileparts(obj.outputFilename); %#ok<*PROPLC>
-                    movefile([obj.path, obj.outputDirname, obj.outputFilename], [obj.path, obj.outputDirname, outputFilename, '_old.mat'])
-                end
-                obj.Save();
+                obj.initsaveflag = true;
             end
             err = 0;
         end
@@ -764,6 +689,10 @@ classdef GroupClass < TreeNodeClass
             if ~exist('hwait','var')
                 hwait = [];
             end            
+            if obj.initsaveflag == false
+                obj.initsaveflag = true;
+                return
+            end
             
             obj.logger.Write('Saving processed data in %s\n', [obj.path, obj.outputDirname, obj.outputFilename]);
             
@@ -779,6 +708,7 @@ classdef GroupClass < TreeNodeClass
                 MessageBox(ME.message);
                 obj.logger.Write(ME.message);
             end            
+            obj.initsaveflag = true;
         end
         
         
@@ -840,15 +770,6 @@ classdef GroupClass < TreeNodeClass
         % ----------------------------------------------------------------------------------
         function probe = GetProbe(obj)
             probe = obj.subjs(1).GetProbe();
-%             for subj = obj.subjs
-%                 for sess = subj.sess
-%                    for run = sess.runs
-%                         if ~(probe == run.GetProbe()) 
-%                             warning(['Probe ', run.name, ' differs from ', obj.subjs(1).sess(1).runs(1).name]) 
-%                         end
-%                    end   
-%                 end
-%             end
         end
         
         
@@ -987,7 +908,7 @@ classdef GroupClass < TreeNodeClass
                     msg{1} = sprintf('Previous Homer3 processing output exists but is now inconsistent with the current ');
                     msg{2} = sprintf('data files. This output should be regenerated in the new Homer3 session to reflect the new file/folder names. ');
                     msg{3} = sprintf('The existing Homer processing output will be moved to %s. Is this okay?', obj.GetArchivedOutputDirname());
-                    q = MenuBox(msg,{'YES','NO'});
+                    q = MenuBox(msg, {'YES','NO'});
                     if q==1
                         if isempty(obj.outputDirname)
                             movefile('*.mat', obj.GetArchivedOutputDirname())
@@ -1111,13 +1032,13 @@ classdef GroupClass < TreeNodeClass
                     
                     % If we're here it means that old format homer3 data exists
                     % AND NO new homer3 format data exists
-                    q = MenuBox(sprintf('%s Do you want to move %s to the new folder?', msg, oldDerivedPathRel),{'Yes','No'});
+                    q = MenuBox(sprintf('%s Do you want to move %s to the new folder?', msg, oldDerivedPathRel), {'Yes','No'});
                     if q==1
                         if ispathvalid([obj.path, obj.outputDirname])
                             try
                                 rmdir([obj.path, obj.outputDirname], 's')
                             catch
-                                MenuBox(sprintf('ERROR:  Could not remove new derived folder'),{'OK'});
+                                MenuBox(sprintf('ERROR:  Could not remove new derived folder'), 'OK');
                                 return
                             end
                         end
@@ -1125,7 +1046,11 @@ classdef GroupClass < TreeNodeClass
                         if ~ispathvalid([obj.path, obj.outputDirname])
                             mkdir([obj.path, obj.outputDirname]);
                         end
-                        movefile(oldDerivedPath, [obj.path, obj.outputDirname])
+                        
+                        try
+                            movefile(oldDerivedPath, [obj.path, obj.outputDirname])
+                        catch
+                        end
                         
                         if ispathvalid([obj.path, obj.outputDirname, obj.outputFilename])
                             if ~strcmp(obj.outputFilename, 'groupResults.mat')

@@ -43,7 +43,6 @@ classdef ProcStreamClass < handle
                 return;
             end
             obj.CreateDefault();
-            obj.ExportProcStreamFunctions(false);
         end
         
         
@@ -376,10 +375,16 @@ classdef ProcStreamClass < handle
         % ----------------------------------------------------------------------------------        
         function mlActMan = CompressMlActMan(obj)
             mlActMan = [];
-            if isempty(obj.input.mlActMan)
+
+            % We don't need to compress mlAct man because it is usually not that big 
+            % But even did then we have to modify compressLogicalArray to handle 2d arrays 
+            % instead of just vectors.
+            % mlActMan = compressLogicalArray(obj.input.mlActMan{1});
+            temp = obj.GetVar('mlActMan');
+            if isempty(temp)
                 return
             end
-            mlActMan = compressLogicalArray(obj.input.mlActMan{1});
+            mlActMan = temp{1};
         end
         
         
@@ -396,20 +401,24 @@ classdef ProcStreamClass < handle
                 
         % ----------------------------------------------------------------------------------        
         function ExportProcStream(obj, filename, fcalls)
-            global logger             
+            global logger
+            global cfg
             temp = obj.output.SetFilename(filename);
             if isempty(temp)
                 return;
             end
             [p,f] = fileparts(temp); 
             fname = [filesepStandard(p), f, '_processing.json'];
-            if obj.ExportProcStreamFunctions()==true
+            if strcmpi(cfg.GetValue('Export Processing Stream Functions'), 'yes')
                 logger.Write('Saving processing stream  %s:\n', fname);
-                appname = sprintf('%s, (v%s)', getNamespace(), getVernum(getNamespace()));
+                appname = sprintf('%s', getNamespace());
+                vernum  = sprintf('v%s', getVernum(appname));
                 dt      = sprintf('%s', char(datetime(datetime, 'Format','MMMM d, yyyy,   HH:mm:ss')));
                 mlActManCompressed = obj.CompressMlActMan();
                 tIncManCompressed = obj.CompresstIncMan();
-                jsonstruct = struct('ApplicationName',appname, 'DateTime',dt, 'tIncMan',tIncManCompressed, 'mlActMan',mlActManCompressed, 'FunctionsCalls',{fcalls});
+                jsonstruct = struct('ProcessingElement',f, 'ApplicationName',appname, 'Version',vernum, ...
+                                    'Dependencies',obj.ExportProcStreamDependencies(), 'DateTime',dt, 'tIncMan',tIncManCompressed, ...
+                                    'mlActMan',mlActManCompressed, 'FunctionCalls',{fcalls});
                 jsonStr = savejson('Processing', jsonstruct);
                 fid = fopen(fname, 'w');
                 fwrite(fid, jsonStr, 'uint8');
@@ -423,10 +432,23 @@ classdef ProcStreamClass < handle
                     end
                 end
             end
-        end        
+        end
         
         
-        % ----------------------------------------------------------------------------------        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function depStruct = ExportProcStreamDependencies(obj)
+            depStruct = struct();
+            [d, v] = dependencies();
+            for ii = 1:length(d)
+                eval( sprintf('depStruct.%s = ''v%s'';', d{ii}, v{ii}) );
+            end
+        end
+
+        
+        
+        % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
             nbytes(1) = obj.input.MemoryRequired();
             nbytes(2) = obj.output.MemoryRequired();
@@ -1447,7 +1469,7 @@ classdef ProcStreamClass < handle
         
         
         % ---------------------------------------------------------
-        function ml = GetMeasurementList(obj, matrixMode, iBlks, dataType)
+        function ml = GetMeasurementList(obj, matrixMode, iBlk, dataType)
             %  
             %  Syntax: 
             %     ml = GetMeasurementList(obj, matrixMode, iBlks, dataType)
@@ -1465,35 +1487,29 @@ classdef ProcStreamClass < handle
             if ~exist('matrixMode','var')
                 matrixMode = '';
             end
-            if ~exist('iBlks','var') || isempty(iBlks)
-                iBlks = 1;
+            if ~exist('iBlk','var') || isempty(iBlk)
+                iBlk = 1;
             end
             if ~exist('dataType','var')
                 dataType = obj.datatypes.CONCENTRATION{1};
             end
-            for iBlk = 1:length(iBlks)
-                switch(lower(dataType))
-                    case obj.datatypes.OPTICAL_DENSITY
-                        if iBlk <= length(obj.output.dod)
-                            ml = [ml; obj.output.dod(iBlk).GetMeasurementList(matrixMode)];
-                        end
-                        break;
-                    case obj.datatypes.CONCENTRATION
-                        if iBlk <= length(obj.output.dc)
-                            ml = [ml; obj.output.dc(iBlk).GetMeasurementList(matrixMode)];
-                        end
-                        break;
-                    case [obj.datatypes.HRF_OPTICAL_DENSITY, obj.datatypes.HRF_OPTICAL_DENSITY_STD]
-                        if iBlk <= length(obj.output.dodAvg)
-                            ml = [ml; obj.output.dodAvg(iBlk).GetMeasurementList(matrixMode)];
-                        end
-                        break;
-                    case [obj.datatypes.HRF_CONCENTRATION, obj.datatypes.HRF_CONCENTRATION_STD]
-                        if iBlk <= length(obj.output.dcAvg)
-                            ml = [ml; obj.output.dcAvg(iBlk).GetMeasurementList(matrixMode)];
-                        end
-                        break;
-                end
+            switch(lower(dataType))
+                case obj.datatypes.OPTICAL_DENSITY
+                    if iBlk <= length(obj.output.dod)
+                        ml = obj.output.dod(iBlk).GetMeasurementList(matrixMode);
+                    end
+                case obj.datatypes.CONCENTRATION
+                    if iBlk <= length(obj.output.dc)
+                        ml = obj.output.dc(iBlk).GetMeasurementList(matrixMode);
+                    end
+                case [obj.datatypes.HRF_OPTICAL_DENSITY, obj.datatypes.HRF_OPTICAL_DENSITY_STD]
+                    if iBlk <= length(obj.output.dodAvg)
+                        ml = obj.output.dodAvg(iBlk).GetMeasurementList(matrixMode);
+                    end
+                case [obj.datatypes.HRF_CONCENTRATION, obj.datatypes.HRF_CONCENTRATION_STD]
+                    if iBlk <= length(obj.output.dcAvg)
+                        ml = obj.output.dcAvg(iBlk).GetMeasurementList(matrixMode);
+                    end
             end
         end        
 
@@ -1511,7 +1527,7 @@ classdef ProcStreamClass < handle
         
         
         % ---------------------------------------------------------
-        function dataTimeSeries = GetDataTimeSeries(obj, options, iBlk)
+        function [dataTimeSeries, time, measurementList] = GetDataTimeSeries(obj, options, iBlk)
             %  
             %  Syntax: 
             %     dataTimeSeries = GetDataTimeSeries(obj, options, iBlk)
@@ -1525,39 +1541,51 @@ classdef ProcStreamClass < handle
             %        HRF Concentration   :  'hb hrf' | 'conc hrf' | 'hb_hrf' | 'conc_hrf'
             %
             dataTimeSeries = [];
+            time = [];
+            measurementList = [];
             if ~exist('options','var')
                 options = obj.datatypes.CONCENTRATION{1};
             end
             if ~exist('iBlk','var') || isempty(iBlk)
                 iBlk = 1;
             end
-            for ii = 1:length(iBlk)
-                switch(lower(options))
-                    case obj.datatypes.OPTICAL_DENSITY
-                        if ii <= length(obj.output.dod)
-                            dataTimeSeries = [dataTimeSeries, obj.output.dod(ii).dataTimeSeries];
-                        end
-                    case obj.datatypes.CONCENTRATION
-                        if ii <= length(obj.output.dc)
-                            dataTimeSeries = [dataTimeSeries; obj.output.dc(ii).dataTimeSeries];
-                        end
-                    case obj.datatypes.HRF_OPTICAL_DENSITY
-                        if ii <= length(obj.output.dodAvg)
-                            dataTimeSeries = [dataTimeSeries; obj.output.dodAvg(ii).dataTimeSeries];
-                        end
-                    case obj.datatypes.HRF_CONCENTRATION
-                        if ii <= length(obj.output.dcAvg)
-                            dataTimeSeries = [dataTimeSeries; obj.output.dcAvg(ii).dataTimeSeries];
-                        end
-                    case obj.datatypes.HRF_CONCENTRATION_STD
-                        if ii <= length(obj.output.dodAvg)
-                            dataTimeSeries = [dataTimeSeries; obj.output.dodAvgStd(ii).dataTimeSeries];
-                        end
-                    case obj.datatypes.HRF_OPTICAL_DENSITY_STD
-                        if ii <= length(obj.output.dcAvg)
-                            dataTimeSeries = [dataTimeSeries; obj.output.dcAvgStd(ii).dataTimeSeries];
-                        end
-                end
+            switch(lower(options))
+                case obj.datatypes.OPTICAL_DENSITY
+                    if iBlk <= length(obj.output.dod)
+                        dataTimeSeries = obj.output.dod(iBlk).dataTimeSeries;
+                        time = obj.output.dod(iBlk).time;
+                        measurementList = obj.output.dod(iBlk).GetMeasurementList('matrix');
+                    end
+                case obj.datatypes.CONCENTRATION
+                    if iBlk <= length(obj.output.dc)
+                        dataTimeSeries = obj.output.dc(iBlk).dataTimeSeries;
+                        time = obj.output.dc(iBlk).time;
+                        measurementList = obj.output.dc(iBlk).GetMeasurementList('matrix');
+                    end
+                case obj.datatypes.HRF_OPTICAL_DENSITY
+                    if iBlk <= length(obj.output.dodAvg)
+                        dataTimeSeries = obj.output.dodAvg(iBlk).dataTimeSeries;
+                        time = obj.output.dodAvg(iBlk).time;
+                        measurementList = obj.output.dodAvg(iBlk).GetMeasurementList('matrix');
+                    end
+                case obj.datatypes.HRF_CONCENTRATION
+                    if iBlk <= length(obj.output.dcAvg)
+                        dataTimeSeries = obj.output.dcAvg(iBlk).dataTimeSeries;
+                        time = obj.output.dcAvg(iBlk).time;
+                        measurementList = obj.output.dcAvg(iBlk).GetMeasurementList('matrix');
+                    end
+                case obj.datatypes.HRF_CONCENTRATION_STD
+                    if iBlk <= length(obj.output.dodAvg)
+                        dataTimeSeries = obj.output.dodAvgStd(iBlk).dataTimeSeries;
+                        time = obj.output.dodAvgStd(iBlk).time;
+                        measurementList = obj.output.dodAvgStd(iBlk).GetMeasurementList('matrix');
+                    end
+                case obj.datatypes.HRF_OPTICAL_DENSITY_STD
+                    if iBlk <= length(obj.output.dcAvg)
+                        dataTimeSeries = obj.output.dcAvgStd(iBlk).dataTimeSeries;
+                        time = obj.output.dcAvgStd(iBlk).time;
+                        measurementList = obj.output.dcAvgStd(iBlk).GetMeasurementList('matrix');
+                    end
             end
         end
         
@@ -1939,24 +1967,7 @@ classdef ProcStreamClass < handle
         end
         
     end
-    
-    
-    
-    methods (Static)
         
-        % ----------------------------------------------------------------------------------
-        function out = ExportProcStreamFunctions(arg)
-            persistent saveProcStream;
-            if nargin == 0
-                out = saveProcStream;
-                return;
-            end
-            saveProcStream = arg;
-            out = saveProcStream;
-        end
-        
-    end
-    
 end
 
 
